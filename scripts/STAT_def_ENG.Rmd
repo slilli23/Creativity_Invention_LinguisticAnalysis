@@ -1,0 +1,514 @@
+---
+title: "Stat_def"
+author: "Silvia Lilli"
+date: "2024-08-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(fs)
+library(here)
+
+dir_create(here(c("data",
+                  "scripts",
+                  "figures",
+                  "output",
+                  "to_osf")))
+```
+
+This file contains the procedure for descriptive statistical analysis and graphical processing of the overall linguistic data from Testori's works: L'Ambleto, Macbetto, Edipus, Sfaust, sdisOrè, and Tre lai.
+
+The data were collected through manual labeling of the forms, assigning each marked feature to a grammatical category based on the placement of the mark in the word/sentence (phonetics, morphology, lexicon, syntax) and to a different group based on the type of marking, that is, the origin of the variation or the stylistic function achieved (Dialectisms, Colloquialisms, Aulicisms, Idiolectisms). To perform the following analyses, load the necessary libraries:
+
+
+```{r}
+# the tidyverse, for data manipulation
+library(tidyverse)
+
+# `here` for easy file paths
+library(here)
+here()
+
+# readxl for reading excel files
+library(readxl)
+
+# writexl for saving output tibbles
+library(writexl)
+
+#ggplot2 for plotting
+library(ggplot2)
+
+#RColorBrewer for selecting colors
+library(RColorBrewer)
+
+```
+
+Position the working folder:
+
+```{r}
+here::i_am("STAT_def.Rmd")
+```
+Load the Excel file with the final aggregated counts:
+
+```{r}
+dataset <- read_excel(here("data", "statistiche_def.xlsx"))
+```
+
+Display the table:
+
+```{r}
+dataset
+```
+
+Add the chronological information to the table:
+
+
+```{r}
+
+
+dataset <- dataset %>%
+  add_row(Feature = "Year", 
+          Category = NA, 
+          Mark = NA, 
+          Ambleto = 1972, 
+          Macbetto = 1974, 
+          Edipus = 1977, 
+          Sfaust = 1990, 
+          sdisOrè = 1991, 
+          Tre_lai = 1992)
+
+# Visualizza il dataset aggiornato
+print(dataset)
+
+```
+
+
+To obtain a quantitative comparison of the use of different markings, first sum the data based on the 'Mark' column for each column of the six works:
+
+
+```{r}
+
+
+tokens_values <- dataset %>%
+  filter(Feature == "Tokens") %>%
+  select(Ambleto:Tre_lai) %>%
+  unlist()
+
+dataset_summary <- dataset %>%
+  group_by(Mark) %>%
+  summarise(across(Ambleto:Tre_lai, sum, na.rm = TRUE))
+
+print(dataset_summary)
+```
+
+At this point, we need to remove the 'Italian' and 'NA' rows because they relate to entries that are not of interest.
+
+```{r}
+
+dataset_summary <- subset(dataset_summary, Mark != "Italian" & !is.na(Mark))
+
+print(dataset_summary)
+
+
+```
+
+Now we need to normalize the values based on the length of the works:
+
+```{r}
+
+tokens <- dataset[dataset$Feature == "Tokens", ]
+tokens_values <- tokens[ , names(dataset_summary)[-1]]
+normalized_summary <- dataset_summary
+
+for (col in names(dataset_summary)[-1]) {
+  normalized_summary[[col]] <- dataset_summary[[col]] / as.numeric(tokens_values[[col]])
+}
+
+print(normalized_summary)
+
+
+```
+
+
+Now let's create a grouped bar histogram to represent the contribution of the various marked categories in each work:
+
+```{r}
+
+dataset_summary_long <- pivot_longer(normalized_summary, cols = Ambleto:Tre_lai, 
+                             names_to = "Opera", values_to = "Valore")
+print(dataset_summary_long)
+```
+
+Let's also add the chronological information here:
+
+```{r}
+
+
+dataset_summary_long <- dataset_summary_long %>%
+  mutate(Anno = case_when(
+    Opera == "Ambleto"  ~ 1972,
+    Opera == "Macbetto" ~ 1974,
+    Opera == "Edipus"   ~ 1977,
+    Opera == "Sfaust"   ~ 1990,
+    Opera == "sdisOrè"  ~ 1991,
+    Opera == "Tre_lai"  ~ 1992,
+    TRUE ~ NA_real_   
+  ))
+
+
+print(dataset_summary_long)
+
+```
+Now assign a specific color palette to the categories:
+
+```{r}
+
+
+colors_set1 <- brewer.pal(n = 4, name = "Set1")
+
+
+color_map <- c("Dialectisms" = colors_set1[1], 
+               "Colloquialisms" = colors_set1[2], 
+               "Elevated Language" = colors_set1[3], 
+               "Idiolectal Features" = colors_set1[4])
+
+```
+
+
+
+```{r}
+
+
+dataset_summary_long$Mark <- factor(dataset_summary_long$Mark, 
+                                    levels = c("Dialectisms", "Colloquialisms", "Elevated Language", "Idiolectal Features"))
+
+dataset_summary_long$Opera <- factor(dataset_summary_long$Opera, 
+                                     levels = c("Ambleto", "Macbetto", "Edipus", "Sfaust", "sdisOrè", "Tre_lai"))
+
+ggplot(dataset_summary_long, aes(x = Opera, y = Valore, fill = Mark)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +
+  labs(title = "Marked features distribution across plays", x = "Text", y = "Value") +
+  theme_minimal() +
+   scale_fill_manual(values = color_map) +
+  scale_x_discrete(labels = c("L'Ambleto", "Macbetto", "Edipus", "Sfaust", "sdisOrè", "Tre lai")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave(filename = here("figures", "stacked_bar_chart_mark_eng.png"), width = 12, height = 6)
+```
+
+
+Now let's create a line chart that shows the temporal evolution:
+
+```{r}
+
+
+dataset_summary_long$Mark <- factor(dataset_summary_long$Mark, 
+                                    levels = c("Dialectisms", "Colloquialisms", "Elevated Language", "Idiolectal Features"))
+
+dataset_summary_long$Opera <- factor(dataset_summary_long$Opera, 
+                                     levels = c("Ambleto", "Macbetto", "Edipus", "Sfaust", "sdisOrè", "Tre_lai"))
+
+
+
+ggplot(dataset_summary_long, aes(x = Opera, y = Valore, group = Mark, color = Mark)) +
+  geom_line(size = 1, aes(group = Mark)) +  
+  geom_point(size = 2) +  
+ 
+  labs(title = "Valori per categoria nelle opere", x = "Text", y = "Value", color = "Mark") +
+ theme_minimal() +
+   scale_color_manual(values = color_map, 
+      ) +
+  scale_x_discrete(labels = c("L'Ambleto", "Macbetto", "Edipus", "Sfaust", "sdisOrè", "Tre lai")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  
+
+
+ggsave(filename = here("figures", "lines_chart_mark_eng.png"), width = 12, height = 6)
+```
+Now let's proceed with the comparative analysis of the aggregated values based on the different grammatical categories:
+
+```{r}
+
+dataset_category <- dataset %>%
+  group_by(Category, Mark) %>%
+  summarise(
+    Ambleto = sum(Ambleto, na.rm = TRUE),
+    Macbetto = sum(Macbetto, na.rm = TRUE),
+    Edipus = sum(Edipus, na.rm = TRUE),
+    Sfaust = sum(Sfaust, na.rm = TRUE),
+    sdisOrè = sum(sdisOrè, na.rm = TRUE),
+    Tre_lai = sum(Tre_lai, na.rm = TRUE)
+  )
+
+print(dataset_category)
+
+```
+
+Let's remove the empty or irrelevant rows:
+
+```{r}
+
+dataset_category <- subset(dataset_category, Category != "Dynamics" & Category != "General" & Mark != "Italian")
+
+print(dataset_category)
+
+
+```
+
+Now let's normalize the values based on the number of tokens:
+
+
+```{r}
+
+normalized_category <- dataset_category
+
+for (col in names(dataset_category)[-c(1, 2)]) {
+  normalized_category[[col]] <- dataset_category[[col]] / as.numeric(tokens_values[[col]])
+}
+
+print(normalized_category)
+
+
+```
+
+Let's create the graph:
+
+
+```{r}
+
+
+normalized_long <- normalized_category %>%
+  pivot_longer(cols = c(Ambleto, Macbetto, Edipus, Sfaust, sdisOrè, Tre_lai),
+               names_to = "Opera", values_to = "Value")
+
+normalized_long <- normalized_long %>%
+  mutate(
+    Opera = factor(Opera, levels = c("Ambleto", "Macbetto", "Edipus", "Sfaust", "sdisOrè", "Tre_lai")),
+    Mark = factor(Mark, levels = c("Dialectisms", "Colloquialisms", "Elevated Language", "Idiolectal Features")),
+    Category = factor(Category, levels = c("Phonetics", "Morphology", "Lexicon", "Syntax"))
+               
+  )
+
+ggplot(normalized_long, aes(x = Mark, y = Value, fill = Category)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~ Opera) +
+  labs(x = "Mark", y = "Value", fill = "Category") +
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave(filename = here("figures", "stacked_chart_category_pgn.png"), width = 12, height = 6)
+
+```
+Now, let's create an overall pie chart to represent the contribution of each category for every mark:
+
+
+```{r}
+
+category_mark_summary <- normalized_category %>%
+  group_by(Mark, Category) %>%
+  summarise(TotalValue = sum(Ambleto, Macbetto, Edipus, Sfaust, sdisOrè, Tre_lai)) %>%
+  ungroup() %>%
+  group_by(Mark) %>%
+  mutate(Percentage = TotalValue / sum(TotalValue) * 100) %>%
+  ungroup() %>%
+  mutate(
+    Mark = factor(Mark, levels = c("Dialectisms", "Colloquialisms", "Elevated Language", "Idiolectal Features")),
+    Category = factor(Category, levels = c("Phonetics", "Morphology", "Lexicon", "Syntax"))
+                
+  )
+
+ggplot(category_mark_summary, aes(x = "", y = Percentage, fill = Category)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y") +
+  facet_wrap(~ Mark, ncol = 2) +
+  labs(fill = "Category", y = "Percentuale") +
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal() +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid = element_blank(),
+        strip.text = element_text(size = 10, face = "bold")) +
+  geom_text(aes(label = paste0(round(Percentage, 1), "%")), 
+            position = position_stack(vjust = 0.5), size = 3)
+
+ggsave(filename = here("figures", "percentage_chart_category_eng.png"), width = 12, height = 6)
+
+```
+
+Now, let's proceed with the descriptive statistical analysis. First, let's evaluate the mean, median, and standard deviation for each marking category.
+
+```{r}
+
+
+mean_value <- rowMeans(normalized_summary[,-1])
+
+median_value <- apply(normalized_summary[,-1], 1, median)
+
+sd_value <- apply(normalized_summary[,-1], 1, sd)
+
+dataset_statistics <- data.frame(
+  Mark = dataset_summary$Mark,
+  mean = mean_value,
+  median = median_value,
+  sd = sd_value
+)
+
+print(dataset_statistics)
+
+
+```
+
+Now, let's represent the statistical data with a histogram:
+
+```{r}
+
+library(tidyr)
+dataset_long <- dataset_statistics %>%
+  pivot_longer(cols = c(mean, median, sd), names_to = "Statistic", values_to = "Value")
+
+
+print(dataset_long)
+
+```
+
+```{r}
+
+
+dataset_long <- dataset_long %>%
+  mutate(
+    Mark = factor(Mark, levels = c("Dialectisms", "Colloquialisms", "Elevated Language", "Idiolectal Features"))
+  )
+
+filtered_data <- dataset_long %>%
+  filter(Statistic %in% c("mean"))
+
+error_data <- dataset_long %>%
+  filter(Statistic == "mean") %>%
+  mutate(
+    ymin = Value - dataset_statistics$sd,
+    ymax = Value + dataset_statistics$sd
+  )
+
+
+ggplot(filtered_data, aes(x = Mark, y = Value, fill = Statistic)) +
+  geom_col(position = "dodge") +
+  geom_errorbar(
+    data = error_data,  
+    aes(ymin = ymin, ymax = ymax),
+    position = position_dodge(0.9), width = 0.25) +  
+  labs(title = "Mean of marked categories with standard deviations as error bars",
+       x = "Categories", 
+       y = "Value") +
+  theme_minimal()+
+theme(axis.text.x = element_text(angle = 45, hjust = 1))  
+
+ggsave(filename = here("figures", "statistics_mark_eng.png"), width = 12, height = 6)
+
+```
+
+Now, let's prepare the dataset for a correlation analysis between the categories of each mark:
+
+
+
+```{r}
+
+
+normalized_category$Combined <- paste(normalized_category$Mark, normalized_category$Category, sep = "_")
+
+values_df <- normalized_category[, !(names(normalized_category) %in% c("Mark", "Category", "Combined"))]
+
+transposed_df <- t(values_df)
+
+transposed_df <- as.data.frame(transposed_df)
+colnames(transposed_df) <- normalized_category$Combined
+
+rownames(transposed_df) <- colnames(values_df)
+
+print(transposed_df)
+
+
+
+```
+
+Now, let's perform a correlation analysis:
+
+```{r}
+
+correlation_matrix <- cor(transposed_df, use = "complete.obs")
+
+print(correlation_matrix)
+
+```
+
+Now, let's visualize the data with a heat map:
+
+```{r}
+
+if (!require(corrplot)) install.packages("corrplot")
+
+library(corrplot)
+
+corrplot(correlation_matrix, method = "color", tl.cex = 0.7)
+
+```
+
+For better readability, let's use a pre-sorted dataset:
+
+```{r}
+
+dataset_correlation <- read_excel(here("data", "normalized_correlation_ENG.xlsx"))
+
+dataset_correlation
+```
+
+Now, let's perform a correlation analysis:
+
+```{r}
+
+correlation_matrix2 <- cor(dataset_correlation, use = "complete.obs")
+
+print(correlation_matrix2)
+
+```
+Now, let's visualize the data with a heat map:
+
+```{r}
+
+png(filename = here("figures", "correlation_matrix_ordered_eng.png"), width = 800, height = 600)
+
+corrplot(correlation_matrix2, method = "color", tl.cex = 0.7)
+
+dev.off()
+
+```
+
+Since the graph is not very informative, let's try the correlation matrix on the summed data for each mark:
+
+```{r}
+
+dataset_correlation_simple <- read_excel(here("data", "normalized_correlation_simple_ENG.xlsx"))
+
+correlation_matrix3 <- cor(dataset_correlation_simple, use = "complete.obs")
+
+print(correlation_matrix3)
+
+```
+Now, let's visualize the data with a heat map:
+
+```{r}
+
+png(filename = here("figures", "correlation_matrix_eng.png"), width = 800, height = 600)
+
+corrplot(correlation_matrix3, method = "color", tl.cex = 0.7)
+
+dev.off()
+
+```
+
