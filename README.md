@@ -1,5 +1,4 @@
-# Creativity, Invention and Linguistic Analysis.
-A Case Study.
+# Creativity, Invention and Linguistic Analysis. A case Study.
 
 
 ## Overview
